@@ -108,6 +108,14 @@
 
       const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materials);
       scene.add(box);
+      // エッジラインを追加
+      const edges = new THREE.EdgesGeometry(box.geometry);
+      const line = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 })
+      );
+      box.add(line);
+
 
       camera.position.set(2, 2, 2);
       camera.lookAt(0, 0, 0);
