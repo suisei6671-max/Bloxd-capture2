@@ -2,25 +2,25 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>BlockItem 完全再現</title>
+  <title>3面テクスチャ → 3Dブロック画像</title>
   <style>
     body {
-      background: #223957;
-      font-family: sans-serif;
+      background: #1a1f2e;
       color: white;
+      font-family: sans-serif;
       text-align: center;
       padding: 2rem;
     }
-
-    .inputs {
-      margin-bottom: 1rem;
+    canvas {
+      display: block;
+      margin: auto;
+      background: transparent;
     }
-
     input {
       margin: 0.5rem;
     }
-
     button {
+      margin-top: 1rem;
       padding: 0.5rem 1rem;
       font-size: 1rem;
       background: #3392ff;
@@ -29,139 +29,97 @@
       border-radius: 4px;
       cursor: pointer;
     }
-
-    .InvenItem {
-      display: inline-block;
-      width: 56px;
-      height: 56px;
-      position: relative;
-      transform: scale(4);
-      transform-origin: top left;
-    }
-
-    .ItemWrapper {
-      width: 100%;
-      height: 100%;
-    }
-
-    .BlockItemWrapper {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      margin-bottom: 40%;
-    }
-
-    .BlockItem {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-    }
-
-    .BlockItem2 {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-    }
-
-    .BlockItem3 {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-
-    .BlockItem3Inner {
-      width: 100%;
-      height: 100%;
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-    }
-
-    #capture-area {
-      display: inline-block;
-      margin-top: 2rem;
-    }
   </style>
 </head>
 <body>
-  <h1>BlockItem 完全再現</h1>
-
-  <div class="inputs">
-    <label>前面: <input type="file" id="front" accept="image/*" /></label><br>
-    <label>側面: <input type="file" id="side" accept="image/*" /></label><br>
-    <label>上面: <input type="file" id="top" accept="image/*" /></label><br>
-  </div>
-
+  <h1>3面テクスチャ → 3Dブロック画像</h1>
+  <input type="file" id="front" accept="image/*"> 前面<br>
+  <input type="file" id="side" accept="image/*"> 側面<br>
+  <input type="file" id="top" accept="image/*"> 上面<br>
   <button id="generate">生成＆保存</button>
 
-  <div id="capture-area"></div>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script>
-    function fileToDataURL(file) {
+    const frontInput = document.getElementById("front");
+    const sideInput = document.getElementById("side");
+    const topInput = document.getElementById("top");
+    const button = document.getElementById("generate");
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ alpha: true, preserveDrawingBuffer: true, antialias: false });
+    renderer.setSize(512, 512);
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(3, 5, 4);
+    scene.add(dirLight);
+
+    camera.position.set(2, 2, 2);
+    camera.lookAt(0, 0, 0);
+
+    function fileToTexture(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const texture = new THREE.Texture(img);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            texture.needsUpdate = true;
+            resolve(texture);
+          };
+          img.src = reader.result;
+        };
         reader.readAsDataURL(file);
       });
     }
 
-    document.getElementById("generate").addEventListener("click", async () => {
-      const frontFile = document.getElementById("front").files[0];
-      const sideFile = document.getElementById("side").files[0];
-      const topFile = document.getElementById("top").files[0];
-
-      if (!frontFile || !sideFile || !topFile) {
+    button.addEventListener("click", async () => {
+      const front = frontInput.files[0];
+      const side = sideInput.files[0];
+      const top = topInput.files[0];
+      if (!front || !side || !top) {
         alert("3面すべての画像を選択してください！");
         return;
       }
 
-      const [frontURL, sideURL, topURL] = await Promise.all([
-        fileToDataURL(frontFile),
-        fileToDataURL(sideFile),
-        fileToDataURL(topFile),
+      const [frontTex, sideTex, topTex] = await Promise.all([
+        fileToTexture(front),
+        fileToTexture(side),
+        fileToTexture(top),
       ]);
 
-      const captureArea = document.getElementById("capture-area");
-      captureArea.innerHTML = "";
+      const materials = [
+        new THREE.MeshBasicMaterial({ map: sideTex }),  // right
+        new THREE.MeshBasicMaterial({ map: sideTex }),  // left
+        new THREE.MeshBasicMaterial({ map: topTex }),   // top
+        new THREE.MeshBasicMaterial({ map: frontTex }), // bottom（代用）
+        new THREE.MeshBasicMaterial({ map: frontTex }), // front
+        new THREE.MeshBasicMaterial({ map: sideTex }),  // back
+      ];
 
-      const inven = document.createElement("div");
-      inven.className = "InvenItem";
+      scene.clear();
+      scene.add(dirLight);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-      inven.innerHTML = `
-        <div class="ItemWrapper">
-          <div class="BlockItemWrapper">
-            <div class="BlockItem" style="background-image: url('${frontURL}');">
-              <div class="BlockItem2" style="background-image: url('${sideURL}'); height: 100%;"></div>
-              <div class="BlockItem3">
-                <div class="BlockItem3Inner" style="background-image: url('${topURL}'); height: 100%;"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materials);
+      scene.add(box);
 
-      captureArea.appendChild(inven);
+      camera.position.set(2, 2, 2);
+      camera.lookAt(0, 0, 0);
+      camera.updateProjectionMatrix();
 
-      // スクショ保存
-      setTimeout(() => {
-        html2canvas(inven, {
-          backgroundColor: null,
-          scale: 8,
-        }).then((canvas) => {
-          const link = document.createElement("a");
-          link.download = "block-replica.png";
-          link.href = canvas.toDataURL("image/png");
-          link.click();
-        });
-      }, 100);
+      renderer.render(scene, camera);
+
+      const dataURL = renderer.domElement.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = dataURL;
+      a.download = "block3d.png";
+      a.click();
     });
   </script>
 </body>
