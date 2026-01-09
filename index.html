@@ -2,14 +2,164 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Block Texture Capture</title>
-  <script type="module" src="./block.js"></script>
+  <title>Block Screenshot Tool</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #1a1f2e;
+      color: white;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .inputs {
+      margin-bottom: 1rem;
+    }
+
+    .inputs input {
+      margin: 0.5rem;
+    }
+
+    .BlockItem {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      background-size: contain !important;
+      background-repeat: no-repeat !important;
+      background-color: transparent !important;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 2rem auto;
+      transform: scale(4); /* 拡大して高解像度に */
+      transform-origin: top left;
+    }
+
+    .BlockItem2 {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      background-size: contain !important;
+      background-repeat: no-repeat !important;
+      clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 50% 75%, 0% 100%, 0% 25%);
+      opacity: 0.6;
+    }
+
+    .BlockItem3 {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .BlockItem3Inner {
+      width: 100%;
+      height: 100%;
+      background-size: contain !important;
+      background-repeat: no-repeat !important;
+      clip-path: polygon(50% 0%, 100% 25%, 50% 50%, 0% 25%);
+      opacity: 0.8;
+    }
+
+    #capture-area {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      margin: auto;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      background: #3392ff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-  <h1>3面テクスチャからブロック画像生成</h1>
-  <input type="file" id="top" accept="image/*"> 上面<br>
-  <input type="file" id="side" accept="image/*"> 側面<br>
-  <input type="file" id="front" accept="image/*"> 前面<br>
+  <h1>3面テクスチャ → ブロック画像生成</h1>
+
+  <div class="inputs">
+    <label>前面: <input type="file" id="front" accept="image/*" /></label><br>
+    <label>側面: <input type="file" id="side" accept="image/*" /></label><br>
+    <label>上面: <input type="file" id="top" accept="image/*" /></label><br>
+  </div>
+
   <button id="generate">生成＆保存</button>
+
+  <div id="capture-area"></div>
+
+  <!-- html2canvas CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <script>
+    function fileToDataURL(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    document.getElementById("generate").addEventListener("click", async () => {
+      const frontFile = document.getElementById("front").files[0];
+      const sideFile = document.getElementById("side").files[0];
+      const topFile = document.getElementById("top").files[0];
+
+      if (!frontFile || !sideFile || !topFile) {
+        alert("3面すべての画像を選択してください！");
+        return;
+      }
+
+      const [frontURL, sideURL, topURL] = await Promise.all([
+        fileToDataURL(frontFile),
+        fileToDataURL(sideFile),
+        fileToDataURL(topFile),
+      ]);
+
+      const block = document.createElement("div");
+      block.className = "BlockItem";
+      block.style.backgroundImage = `url(${frontURL})`;
+
+      const sideDiv = document.createElement("div");
+      sideDiv.className = "BlockItem2";
+      sideDiv.style.backgroundImage = `url(${sideURL})`;
+
+      const topWrapper = document.createElement("div");
+      topWrapper.className = "BlockItem3";
+
+      const topInner = document.createElement("div");
+      topInner.className = "BlockItem3Inner";
+      topInner.style.backgroundImage = `url(${topURL})`;
+
+      topWrapper.appendChild(topInner);
+      block.appendChild(sideDiv);
+      block.appendChild(topWrapper);
+
+      const captureArea = document.getElementById("capture-area");
+      captureArea.innerHTML = "";
+      captureArea.appendChild(block);
+
+      // スクショ撮影
+      setTimeout(() => {
+        html2canvas(captureArea, {
+          backgroundColor: null,
+          scale: 8, // 高解像度
+        }).then((canvas) => {
+          const link = document.createElement("a");
+          link.download = "block.png";
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+        });
+      }, 100);
+    });
+  </script>
 </body>
 </html>
