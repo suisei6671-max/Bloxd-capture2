@@ -1,134 +1,264 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>3面テクスチャ → 3Dブロック画像</title>
-  <style>
-    body {
-      background: #1a1f2e;
-      color: white;
-      font-family: sans-serif;
-      text-align: center;
-      padding: 2rem;
-    }
-    canvas {
-      display: block;
-      margin: auto;
-      background: transparent;
-    }
-    input {
-      margin: 0.5rem;
-    }
-    button {
-      margin-top: 1rem;
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-      background: #3392ff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Isometric Block Tool</title>
+<style>
+html, body {
+  margin: 0;
+  overflow: hidden;
+  font-family: sans-serif;
+}
+canvas { display: block; }
+
+.panel {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: rgba(255,255,255,0.9);
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.panel label {
+  display: block;
+  margin-top: 6px;
+  font-weight: bold;
+}
+</style>
 </head>
 <body>
-  <h1>3面テクスチャ → 3Dブロック画像</h1>
-  <input type="file" id="front" accept="image/*"> 前面<br>
-  <input type="file" id="side" accept="image/*"> 側面<br>
-  <input type="file" id="top" accept="image/*"> 上面<br>
-  <button id="generate">生成＆保存</button>
 
-  <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+<div class="panel">
+  <label><input type="checkbox" id="syncAll"> 同じテクスチャを全面に適用</label>
+  <label><input type="checkbox" id="isSlab"> Slab（ハーフブロック）</label>
 
-    const frontInput = document.getElementById("front");
-    const sideInput = document.getElementById("side");
-    const topInput = document.getElementById("top");
-    const button = document.getElementById("generate");
+  <label>上面</label>
+  <input type="file" id="topFile"><br>
+  <input type="text" id="topUrl" placeholder="texture_name"><br>
+  <input type="text" id="topDirect" placeholder="direct url">
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    const renderer = new THREE.WebGLRenderer({ alpha: true, preserveDrawingBuffer: true, antialias: false });
-    renderer.setSize(512, 512);
-    document.body.appendChild(renderer.domElement);
+  <label>左面</label>
+  <input type="file" id="leftFile"><br>
+  <input type="text" id="leftUrl" placeholder="texture_name"><br>
+  <input type="text" id="leftDirect" placeholder="direct url">
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(3, 5, 4);
-    scene.add(dirLight);
+  <label>右面</label>
+  <input type="file" id="rightFile"><br>
+  <input type="text" id="rightUrl" placeholder="texture_name"><br>
+  <input type="text" id="rightDirect" placeholder="direct url">
+</div>
 
-    camera.position.set(2, 2, 2);
-    camera.lookAt(0, 0, 0);
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { LineMaterial } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/lines/LineMaterial.js";
+import { LineSegments2 } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/lines/LineSegmentsGeometry.js";
 
-    function fileToTexture(file) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = new Image();
-          img.onload = () => {
-            const texture = new THREE.Texture(img);
-            texture.magFilter = THREE.NearestFilter;
-            texture.minFilter = THREE.NearestFilter;
-            texture.needsUpdate = true;
-            resolve(texture);
-          };
-          img.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-      });
-    }
+/* ===== 基本 ===== */
+const scene = new THREE.Scene();
+const aspect = window.innerWidth / window.innerHeight;
 
-    button.addEventListener("click", async () => {
-      const front = frontInput.files[0];
-      const side = sideInput.files[0];
-      const top = topInput.files[0];
-      if (!front || !side || !top) {
-        alert("3面すべての画像を選択してください！");
-        return;
-      }
+const viewSize = 1.1;
+const camera = new THREE.OrthographicCamera(
+  -viewSize * aspect, viewSize * aspect,
+   viewSize, -viewSize,
+  -10, 10
+);
+camera.position.set(0, 0, 5);
+camera.lookAt(0, 0, 0);
 
-      const [frontTex, sideTex, topTex] = await Promise.all([
-        fileToTexture(front),
-        fileToTexture(side),
-        fileToTexture(top),
-      ]);
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
 
-      const materials = [
-        new THREE.MeshBasicMaterial({ map: sideTex }),  // right
-        new THREE.MeshBasicMaterial({ map: sideTex }),  // left
-        new THREE.MeshBasicMaterial({ map: topTex }),   // top
-        new THREE.MeshBasicMaterial({ map: frontTex }), // bottom（代用）
-        new THREE.MeshBasicMaterial({ map: frontTex }), // front
-        new THREE.MeshBasicMaterial({ map: sideTex }),  // back
-      ];
+/* ===== テクスチャ ===== */
+const loader = new THREE.TextureLoader();
+function loadTexture(src) {
+  const t = loader.load(src);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = t.minFilter = THREE.NearestFilter;
+  return t;
+}
 
-      scene.clear();
-      scene.add(dirLight);
-      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+let texTop, texLeft, texRight;
 
-      const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materials);
-      scene.add(box);
-      // エッジラインを追加
-      const edges = new THREE.EdgesGeometry(box.geometry);
-      const line = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 })
-      );
-      box.add(line);
+/* ===== マテリアル ===== */
+const materials = Array.from({ length: 6 }, () =>
+  new THREE.MeshBasicMaterial()
+);
 
+let cube, edgeLine;
 
-      camera.position.set(2, 2, 2);
-      camera.lookAt(0, 0, 0);
-      camera.updateProjectionMatrix();
+/* ===== Slab UV（側面のみ） ===== */
+function applySlabUV(tex) {
+  if (!tex) return;
+  if (isSlab.checked) {
+    tex.repeat.set(1, 0.5);
+    tex.offset.set(0, 0.5);
+  } else {
+    tex.repeat.set(1, 1);
+    tex.offset.set(0, 0);
+  }
+  tex.needsUpdate = true;
+}
 
-      renderer.render(scene, camera);
+/* ===== 枠線（1px outline 相当） ===== */
+function buildEdges(geometry) {
+  const edges = new THREE.EdgesGeometry(geometry);
+  const pos = Array.from(edges.attributes.position.array);
 
-      const dataURL = renderer.domElement.toDataURL("image/png");
-      const a = document.createElement("a");
-      a.href = dataURL;
-      a.download = "block3d.png";
-      a.click();
-    });
-  </script>
+  const geo = new LineSegmentsGeometry();
+  geo.setPositions(pos);
+
+  const mat = new LineMaterial({
+    color: 0x000000,
+    linewidth: 1.0
+  });
+
+  mat.resolution.set(
+    renderer.domElement.width,
+    renderer.domElement.height
+  );
+
+  const line = new LineSegments2(geo, mat);
+  line.computeLineDistances();
+  return line;
+}
+
+/* ===== ブロック生成 ===== */
+function buildCube() {
+  if (cube) scene.remove(cube);
+
+  const h = isSlab.checked ? 0.5 : 1;
+  const geo = new THREE.BoxGeometry(1, h, 1);
+  cube = new THREE.Mesh(geo, materials);
+  scene.add(cube);
+
+  edgeLine = buildEdges(geo);
+  cube.add(edgeLine);
+
+  cube.rotation.set(
+    THREE.MathUtils.degToRad(35.264389),
+    THREE.MathUtils.degToRad(45),
+    0
+  );
+}
+buildCube();
+
+/* ===== テクスチャ適用 ===== */
+function applyTextures() {
+  const sync = syncAll.checked;
+
+  const base = texTop || texLeft || texRight;
+  const top = base ? base.clone() : null;
+  if (top) top.needsUpdate = true;
+
+  const left  = sync ? base : texLeft;
+  const right = sync ? base : texRight;
+
+  applySlabUV(left);
+  applySlabUV(right);
+
+  materials[2].map = top;
+  materials[1].map = left;
+  materials[5].map = left;
+  materials[0].map = right;
+  materials[4].map = right;
+
+  materials.forEach(m => m.needsUpdate = true);
+}
+
+/* ===== UI ===== */
+const BASE =
+"https://raw.githubusercontent.com/Bloxdy/texture-packs/main/default/textures/";
+
+function autoSlab(name) {
+  if (name.includes("slab")) {
+    isSlab.checked = true;
+    buildCube();
+  }
+}
+
+function bindFile(id, setter) {
+  document.getElementById(id).addEventListener("change", e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    autoSlab(f.name);
+    setter(loadTexture(URL.createObjectURL(f)));
+    applyTextures();
+  });
+}
+
+function bindUrl(id, setter, direct=false) {
+  document.getElementById(id).addEventListener("change", e => {
+    const v = e.target.value.trim();
+    if (!v) return;
+    autoSlab(v);
+    setter(loadTexture(direct ? v : BASE + v + ".png"));
+    applyTextures();
+  });
+}
+
+bindFile("topFile", t=>texTop=t);
+bindFile("leftFile", t=>texLeft=t);
+bindFile("rightFile", t=>texRight=t);
+
+bindUrl("topUrl", t=>texTop=t);
+bindUrl("leftUrl", t=>texLeft=t);
+bindUrl("rightUrl", t=>texRight=t);
+
+bindUrl("topDirect", t=>texTop=t, true);
+bindUrl("leftDirect", t=>texLeft=t, true);
+bindUrl("rightDirect", t=>texRight=t, true);
+
+syncAll.onchange = applyTextures;
+isSlab.onchange = () => { buildCube(); applyTextures(); };
+
+/* ===== Ctrl + Enter DL（300×300 固定） ===== */
+window.addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "Enter") {
+
+    renderer.render(scene, camera);
+
+    const src = renderer.domElement;
+    const h = src.height;
+    const w = src.width;
+    const size = h;
+    const sx = (w - size) / 2;
+
+    const out = document.createElement("canvas");
+    out.width = 300;
+    out.height = 300;
+
+    const ctx = out.getContext("2d");
+    ctx.drawImage(
+      src,
+      sx, 0, size, size,
+      0, 0, 300, 300
+    );
+
+    const a = document.createElement("a");
+    a.href = out.toDataURL("image/png");
+    a.download = "block_300.png";
+    a.click();
+  }
+});
+
+/* ===== 描画 ===== */
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
 </body>
 </html>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+console.log("INLINE THREE OK", THREE.REVISION);
+</script>
